@@ -8,7 +8,7 @@ PAYLOAD='{
   "turno": {
     "id": 35,
     "email_cliente": "a@a.com",
-    "telefono_cliente": "11111111",
+    "telefono_cliente": 11111111,
     "idPersonal": 8,
     "fecha": "2026-09-15",
     "hora": "14:30"
