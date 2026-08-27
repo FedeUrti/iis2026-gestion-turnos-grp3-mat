@@ -15,3 +15,9 @@ Proyecto de gestión distribuida de turnos utilizando arquitectura orientada a e
 
 - Publicar un nuevo turno:
   ./scripts/publicar-turno.sh
+
+## Autores
+- Benjamín Gordillo
+- Federico Urtiberea
+- Santiago Lemos
+- Ignacio Porcal
