@@ -1,4 +1,5 @@
 services:
+  # Broker MQTT (Eclipse Mosquitto)
   mosquitto:
     image: eclipse-mosquitto:2
     container_name: mosquitto
@@ -10,6 +11,61 @@ services:
       - mosquitto_data:/mosquitto/data
       - mosquitto_log:/mosquitto/log
 
+  # Base de Datos PostgreSQL
+  db:
+    image: postgres:16-alpine
+    container_name: uruturn_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: uruturn_db
+      POSTGRES_USER: uruturn_user
+      POSTGRES_PASSWORD: uruturn_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U uruturn_user -d uruturn_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Servicio Generador de Turnos (Python)
+  generador:
+    build:
+      context: ./generador
+    container_name: generador_turnos
+    restart: unless-stopped
+    environment:
+      MQTT_HOST: mosquitto
+      MQTT_PORT: 1883
+      MQTT_TOPIC: turnos/solicitudes
+    depends_on:
+      - mosquitto
+
+  # Servicio Consumidor de Turnos (Python)
+  consumidor:
+    build:
+      context: ./consumidor
+    container_name: consumidor_turnos
+    restart: unless-stopped
+    environment:
+      MQTT_HOST: mosquitto
+      MQTT_PORT: 1883
+      MQTT_TOPIC: turnos/solicitudes
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: uruturn_db
+      DB_USER: uruturn_user
+      DB_PASSWORD: uruturn_password
+    depends_on:
+      db:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
+
 volumes:
   mosquitto_data:
   mosquitto_log:
+  postgres_data:
