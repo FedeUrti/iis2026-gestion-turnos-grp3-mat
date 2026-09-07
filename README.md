@@ -21,3 +21,5 @@ Proyecto de gestión distribuida de turnos utilizando arquitectura orientada a e
 - Federico Urtiberea
 - Santiago Lemos
 - Ignacio Porcal
+
+
