@@ -1,4 +1,5 @@
-# Uru Turn! - Plataforma de Gestión de Turnos (Parte 1)
+# Uru Turn! - Plataforma de Gestión de Turnos
+
 
 Proyecto de gestión distribuida de turnos utilizando arquitectura orientada a eventos con MQTT y Docker.
 
