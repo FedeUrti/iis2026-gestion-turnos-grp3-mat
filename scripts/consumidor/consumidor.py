@@ -40,7 +40,7 @@ def validar_y_procesar_turno(datos_msg):
     turno = datos_msg.get('turno', {})
     id_personal = turno.get('idPersonal')
     email = turno.get('email_cliente')
-    telefono = str(turno.get('telefono_cliente'))
+    telefono = turno.get('telefono_cliente')
     fecha_str = turno.get('fecha')
     hora_str = turno.get('hora')
 
@@ -49,7 +49,13 @@ def validar_y_procesar_turno(datos_msg):
         return
 
     # Combinar fecha y hora
-    fecha_hora_solicitada = datetime.strptime(f"{fecha_str} {hora_str}", "%Y-%m-%d %H:%M")
+    try:
+        fecha_hora_solicitada = datetime.strptime(
+            f"{fecha_str} {hora_str}", "%Y-%m-%d %H:%M"
+        )
+    except ValueError:
+        print("[RECHAZADO] La fecha u hora no tiene un formato valido.")
+        return
 
     conn = obtener_conexion_db()
     cursor = conn.cursor(cursor_factory=RealDictCursor)
@@ -57,7 +63,7 @@ def validar_y_procesar_turno(datos_msg):
     try:
         # 1. Obtener datos del personal y del establecimiento
         query_personal = """
-            SELECT p.id_personal, p.estado_personal, e.horario_apertura, e.horario_cierre
+            SELECT p.id_personal, p.activo, e.horario_apertura, e.horario_cierre
             FROM personal p
             JOIN establecimiento e ON p.id_establecimiento = e.id_establecimiento
             WHERE p.id_personal = %s;
@@ -70,7 +76,7 @@ def validar_y_procesar_turno(datos_msg):
             return
 
         # --- REGLA DE NEGOCIO 1: Profesional Activo ---
-        if personal_info['estado_personal'].lower() != 'activo':
+        if not personal_info['activo']:
             print(f"[RECHAZADO] El profesional {id_personal} está INACTIVO.")
             return
 
@@ -79,7 +85,8 @@ def validar_y_procesar_turno(datos_msg):
         apertura = personal_info['horario_apertura']
         cierre = personal_info['horario_cierre']
 
-        if not (apertura <= hora_turno <= cierre):
+        hora_fin_turno = (fecha_hora_solicitada + timedelta(minutes=30)).time()
+        if not (apertura <= hora_turno and hora_fin_turno <= cierre):
             print(f"[RECHAZADO] Horario {hora_str} fuera de la agenda ({apertura} - {cierre}).")
             return
 
@@ -87,10 +94,14 @@ def validar_y_procesar_turno(datos_msg):
         query_solapamiento = """
             SELECT id_reserva FROM reserva
             WHERE id_personal = %s 
-              AND fecha_hora_turno = %s 
-              AND estado_reserva = 'Reservado';
+              AND fecha_turno = %s
+              AND hora_turno = %s
+              AND estado_reserva = 'RESERVADO';
         """
-        cursor.execute(query_solapamiento, (id_personal, fecha_hora_solicitada))
+        cursor.execute(
+            query_solapamiento,
+            (id_personal, fecha_hora_solicitada.date(), fecha_hora_solicitada.time()),
+        )
         existe_turno = cursor.fetchone()
 
         if existe_turno:
@@ -99,10 +110,21 @@ def validar_y_procesar_turno(datos_msg):
 
         # --- SI SUPERA TODAS LAS VALIDACIONES: Guardar en DB ---
         query_insert = """
-            INSERT INTO reserva (fecha_reserva, email_solicitante, telefono_solicitante, fecha_hora_turno, estado_reserva, id_personal)
-            VALUES (NOW(), %s, %s, %s, 'Reservado', %s);
+            INSERT INTO reserva (
+                email_solicitante, telefono_solicitante, id_personal,
+                fecha_turno, hora_turno, estado_reserva
+            ) VALUES (%s, %s, %s, %s, %s, 'RESERVADO');
         """
-        cursor.execute(query_insert, (email, telefono, fecha_hora_solicitada, id_personal))
+        cursor.execute(
+            query_insert,
+            (
+                email,
+                str(telefono),
+                id_personal,
+                fecha_hora_solicitada.date(),
+                fecha_hora_solicitada.time(),
+            ),
+        )
         conn.commit()
 
         print(f"[ACEPTADO Y PERSISTIDO] Turno guardado exitosamente para {email} con el profesional {id_personal} el {fecha_hora_solicitada}.")

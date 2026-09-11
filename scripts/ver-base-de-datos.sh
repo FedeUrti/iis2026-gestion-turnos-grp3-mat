@@ -1,6 +1,6 @@
 #!/bin/bash
 
-CONTAINER_NAME="uruturn-postgres"
+CONTAINER_NAME="uruturn_db"
 DB_USER="uruturn_user"
 DB_NAME="uruturn_db"
 DB_PASSWORD="uruturn_password" # Misma contraseña que en docker-compose.yml
@@ -28,7 +28,7 @@ docker exec -e PGPASSWORD=$DB_PASSWORD -it $CONTAINER_NAME psql -U $DB_USER -d $
 echo ""
 echo "---> 3. RESERVAS DE TURNOS EN BASE DE DATOS:"
 docker exec -e PGPASSWORD=$DB_PASSWORD -it $CONTAINER_NAME psql -U $DB_USER -d $DB_NAME -c \
-  "SELECT id_reserva, fecha_reservado, email_solicitante, id_personal, fecha_turno, hora_turno, estado FROM turno;"
+  "SELECT id_reserva, fecha_reservado, email_solicitante, telefono_solicitante, id_personal, fecha_turno, hora_turno, estado_reserva FROM reserva ORDER BY id_reserva;"
 
 echo ""
 echo "=================================================="
