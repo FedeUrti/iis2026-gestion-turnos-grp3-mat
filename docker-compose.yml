@@ -11,25 +11,43 @@ services:
       - mosquitto_data:/mosquitto/data
       - mosquitto_log:/mosquitto/log
 
-  # Base de Datos PostgreSQL
+  # Base de Datos MySQL
   db:
-    image: postgres:16-alpine
+    image: mysql:8.0
     container_name: uruturn_db
     restart: unless-stopped
     environment:
-      POSTGRES_DB: uruturn_db
-      POSTGRES_USER: uruturn_user
-      POSTGRES_PASSWORD: uruturn_password
+      MYSQL_DATABASE: uruturn_db
+      MYSQL_USER: uruturn_user
+      MYSQL_PASSWORD: uruturn_password
+      MYSQL_ROOT_PASSWORD: root_password
     ports:
-      - "5432:5432"
+      - "3307:3306"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - mysql_data:/var/lib/mysql
       - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U uruturn_user -d uruturn_db"]
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -proot_password"]
       interval: 5s
       timeout: 5s
       retries: 5
+
+  # Interfaz web para administrar MySQL
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: uruturn_phpmyadmin
+    restart: unless-stopped
+    environment:
+      PMA_HOST: db
+      PMA_PORT: 3306
+      MYSQL_ROOT_PASSWORD: root_password
+    ports:
+      - "8080:80"
+    volumes:
+      - phpmyadmin_data:/sessions
+    depends_on:
+      db:
+        condition: service_healthy
 
   # Servicio Generador de Turnos (Python)
   generador:
@@ -57,7 +75,7 @@ services:
       MQTT_PORT: 1883
       MQTT_TOPIC: turnos/solicitudes
       DB_HOST: db
-      DB_PORT: 5432
+      DB_PORT: 3306
       DB_NAME: uruturn_db
       DB_USER: uruturn_user
       DB_PASSWORD: uruturn_password
@@ -70,4 +88,5 @@ services:
 volumes:
   mosquitto_data:
   mosquitto_log:
-  postgres_data:
+  mysql_data:
+  phpmyadmin_data:

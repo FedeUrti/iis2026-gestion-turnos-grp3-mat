@@ -17,17 +17,17 @@ if ! docker ps | grep -q "$CONTAINER_NAME"; then
 fi
 
 echo "---> 1. ESTABLECIMIENTOS REGISTRADOS:"
-docker exec -e PGPASSWORD=$DB_PASSWORD -it $CONTAINER_NAME psql -U $DB_USER -d $DB_NAME -c \
+docker exec -it $CONTAINER_NAME mysql -u$DB_USER -p$DB_PASSWORD -D $DB_NAME -e \
   "SELECT id_establecimiento, nombre_comercial, direccion, telefono, correo_electronico, horario_apertura, horario_cierre FROM establecimiento;"
 
 echo ""
 echo "---> 2. PERSONAL DEL ESTABLECIMIENTO:"
-docker exec -e PGPASSWORD=$DB_PASSWORD -it $CONTAINER_NAME psql -U $DB_USER -d $DB_NAME -c \
+docker exec -it $CONTAINER_NAME mysql -u$DB_USER -p$DB_PASSWORD -D $DB_NAME -e \
   "SELECT id_personal, id_establecimiento, nombre, especialidad, costo_consulta, duracion_atencion, activo FROM personal;"
 
 echo ""
 echo "---> 3. RESERVAS DE TURNOS EN BASE DE DATOS:"
-docker exec -e PGPASSWORD=$DB_PASSWORD -it $CONTAINER_NAME psql -U $DB_USER -d $DB_NAME -c \
+docker exec -it $CONTAINER_NAME mysql -u$DB_USER -p$DB_PASSWORD -D $DB_NAME -e \
   "SELECT id_reserva, fecha_reservado, email_solicitante, telefono_solicitante, id_personal, fecha_turno, hora_turno, estado_reserva FROM reserva ORDER BY id_reserva;"
 
 echo ""

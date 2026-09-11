@@ -3,8 +3,7 @@ import json
 import time
 from datetime import datetime, timedelta
 import paho.mqtt.client as mqtt
-import psycopg2
-from psycopg2.extras import RealDictCursor
+import mysql.connector
 
 # Configuración por variables de entorno
 MQTT_HOST = os.getenv('MQTT_HOST', 'localhost')
@@ -12,25 +11,25 @@ MQTT_PORT = int(os.getenv('MQTT_PORT', 1883))
 MQTT_TOPIC = os.getenv('MQTT_TOPIC', 'turnos/solicitudes')
 
 DB_HOST = os.getenv('DB_HOST', 'localhost')
-DB_PORT = os.getenv('DB_PORT', '5432')
+DB_PORT = int(os.getenv('DB_PORT', '3306'))
 DB_NAME = os.getenv('DB_NAME', 'uruturn_db')
-DB_USER = os.getenv('DB_USER', 'postgres')
-DB_PASSWORD = os.getenv('DB_PASSWORD', 'postgres')
+DB_USER = os.getenv('DB_USER', 'uruturn_user')
+DB_PASSWORD = os.getenv('DB_PASSWORD', 'uruturn_password')
 
 def obtener_conexion_db():
-    """Conecta a la BD  con reintentos para soportar la arrancada del contenedor."""
+    """Conecta a MySQL con reintentos durante el arranque del contenedor."""
     while True:
         try:
-            conn = psycopg2.connect(
+            conn = mysql.connector.connect(
                 host=DB_HOST,
                 port=DB_PORT,
-                dbname=DB_NAME,
+                database=DB_NAME,
                 user=DB_USER,
                 password=DB_PASSWORD
             )
             return conn
-        except psycopg2.OperationalError as e:
-            print("[WARNING] Esperando a que PostgreSQL esté listo...")
+        except mysql.connector.Error:
+            print("[WARNING] Esperando a que MySQL esté listo...")
             time.sleep(3)
 
 def validar_y_procesar_turno(datos_msg):
@@ -58,12 +57,14 @@ def validar_y_procesar_turno(datos_msg):
         return
 
     conn = obtener_conexion_db()
-    cursor = conn.cursor(cursor_factory=RealDictCursor)
+    cursor = conn.cursor(dictionary=True)
 
     try:
         # 1. Obtener datos del personal y del establecimiento
         query_personal = """
-            SELECT p.id_personal, p.activo, e.horario_apertura, e.horario_cierre
+                 SELECT p.id_personal, p.activo,
+                     TIME_FORMAT(e.horario_apertura, '%H:%i') AS horario_apertura,
+                     TIME_FORMAT(e.horario_cierre, '%H:%i') AS horario_cierre
             FROM personal p
             JOIN establecimiento e ON p.id_establecimiento = e.id_establecimiento
             WHERE p.id_personal = %s;
@@ -82,8 +83,8 @@ def validar_y_procesar_turno(datos_msg):
 
         # --- REGLA DE NEGOCIO 2: Horarios dentro de la agenda del establecimiento ---
         hora_turno = fecha_hora_solicitada.time()
-        apertura = personal_info['horario_apertura']
-        cierre = personal_info['horario_cierre']
+        apertura = datetime.strptime(personal_info['horario_apertura'], '%H:%M').time()
+        cierre = datetime.strptime(personal_info['horario_cierre'], '%H:%M').time()
 
         hora_fin_turno = (fecha_hora_solicitada + timedelta(minutes=30)).time()
         if not (apertura <= hora_turno and hora_fin_turno <= cierre):
