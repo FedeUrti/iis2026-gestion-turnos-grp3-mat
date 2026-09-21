@@ -1,0 +1,135 @@
+{
+  "info": {
+    "name": "Uru Turn - API de Reservas",
+    "description": "Pruebas Postman de la API de Reservas. El POST publica en MQTT y el consumidor persiste en MySQL.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000"
+    },
+    {
+      "key": "reservaId",
+      "value": ""
+    },
+    {
+      "key": "fechaTurno",
+      "value": "2026-10-02"
+    }
+  ],
+  "item": [
+    {
+      "name": "1 - Estado de la API",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/health",
+          "host": ["{{baseUrl}}"],
+          "path": ["health"]
+        }
+      }
+    },
+    {
+      "name": "2 - Solicitar reserva",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('La solicitud fue aceptada', function () {",
+              "    pm.response.to.have.status(202);",
+              "});",
+              "const respuesta = pm.response.json();",
+              "pm.collectionVariables.set('reservaId', respuesta.turno.id);",
+              "console.log('ID generado: ' + respuesta.turno.id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email_solicitante\": \"paciente@correo.com\",\n  \"telefono_solicitante\": \"099123456\",\n  \"id_personal\": 1,\n  \"fecha_turno\": \"{{fechaTurno}}\",\n  \"hora_turno\": \"10:00:00\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/reservas",
+          "host": ["{{baseUrl}}"],
+          "path": ["reservas"]
+        }
+      }
+    },
+    {
+      "name": "3 - Listar reservas",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/reservas?fecha_turno={{fechaTurno}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["reservas"],
+          "query": [
+            {
+              "key": "fecha_turno",
+              "value": "{{fechaTurno}}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "4 - Obtener reserva por ID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/reservas/{{reservaId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["reservas", "{{reservaId}}"]
+        }
+      }
+    },
+    {
+      "name": "5 - Actualizar estado",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"estado_reserva\": \"CANCELADO\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/reservas/{{reservaId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["reservas", "{{reservaId}}"]
+        }
+      }
+    },
+    {
+      "name": "6 - Eliminar reserva",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/reservas/{{reservaId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["reservas", "{{reservaId}}"]
+        }
+      }
+    }
+  ]
+}

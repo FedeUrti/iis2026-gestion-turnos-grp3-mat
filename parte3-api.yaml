@@ -1,0 +1,169 @@
+openapi: 3.0.3
+info:
+  title: API de Reservas - Uru Turn
+  version: 1.0.0
+  description: API REST de reservas. Las altas se publican en MQTT y el consumidor las persiste en MySQL.
+servers:
+  - url: http://localhost:8000
+tags:
+  - name: reservas
+paths:
+  /reservas:
+    get:
+      tags: [reservas]
+      summary: Listar reservas
+      parameters:
+        - $ref: '#/components/parameters/IdPersonal'
+        - $ref: '#/components/parameters/FechaTurno'
+        - $ref: '#/components/parameters/EstadoReserva'
+      responses:
+        '200':
+          description: Lista de reservas
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Reserva' }
+        '503': { $ref: '#/components/responses/ServicioNoDisponible' }
+    post:
+      tags: [reservas]
+      summary: Solicitar una reserva
+      description: Publica la solicitud en turnos/solicitudes para que el consumidor la valide y persista.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReservaCreate' }
+      responses:
+        '202':
+          description: Solicitud publicada correctamente
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SolicitudReserva' }
+        '422': { $ref: '#/components/responses/ErrorValidacion' }
+        '503': { $ref: '#/components/responses/ServicioNoDisponible' }
+  /reservas/{id_reserva}:
+    parameters:
+      - $ref: '#/components/parameters/IdReserva'
+    get:
+      tags: [reservas]
+      summary: Obtener una reserva
+      responses:
+        '200':
+          description: Reserva encontrada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Reserva' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+    put:
+      tags: [reservas]
+      summary: Actualizar una reserva
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReservaUpdate' }
+      responses:
+        '200':
+          description: Reserva actualizada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Reserva' }
+        '400': { $ref: '#/components/responses/ErrorValidacion' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+        '409': { $ref: '#/components/responses/Conflicto' }
+    delete:
+      tags: [reservas]
+      summary: Eliminar una reserva
+      responses:
+        '204': { description: Reserva eliminada }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+components:
+  parameters:
+    IdReserva:
+      name: id_reserva
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    IdPersonal:
+      name: id_personal
+      in: query
+      schema: { type: integer, minimum: 1 }
+    FechaTurno:
+      name: fecha_turno
+      in: query
+      schema: { type: string, format: date }
+    EstadoReserva:
+      name: estado_reserva
+      in: query
+      schema: { $ref: '#/components/schemas/EstadoReserva' }
+  schemas:
+    ReservaCreate:
+      type: object
+      required: [email_solicitante, telefono_solicitante, id_personal, fecha_turno, hora_turno]
+      properties:
+        email_solicitante: { type: string, format: email, example: paciente@correo.com }
+        telefono_solicitante: { type: string, minLength: 6, example: '099123456' }
+        id_personal: { type: integer, minimum: 1, example: 1 }
+        fecha_turno: { type: string, format: date, example: '2026-10-01' }
+        hora_turno: { type: string, format: time, example: '10:00:00' }
+    ReservaUpdate:
+      type: object
+      additionalProperties: false
+      properties:
+        email_solicitante: { type: string, format: email }
+        telefono_solicitante: { type: string, minLength: 6, maxLength: 50 }
+        id_personal: { type: integer, minimum: 1 }
+        fecha_turno: { type: string, format: date }
+        hora_turno: { type: string, format: time }
+        estado_reserva: { $ref: '#/components/schemas/EstadoReserva' }
+    Reserva:
+      allOf:
+        - $ref: '#/components/schemas/ReservaCreate'
+        - type: object
+          required: [id_reserva, fecha_reservado, estado_reserva]
+          properties:
+            id_reserva: { type: integer, example: 1 }
+            fecha_reservado: { type: string, format: date-time }
+            estado_reserva: { $ref: '#/components/schemas/EstadoReserva' }
+    EstadoReserva:
+      type: string
+      enum: [RESERVADO, CANCELADO, FINALIZADO]
+    SolicitudReserva:
+      type: object
+      required: [mensaje, turno]
+      properties:
+        mensaje: { type: string, example: Solicitud publicada; el consumidor la procesara }
+        turno: { $ref: '#/components/schemas/TurnoPublicado' }
+    TurnoPublicado:
+      allOf:
+        - $ref: '#/components/schemas/ReservaCreate'
+        - type: object
+          required: [id]
+          properties:
+            id: { type: integer, minimum: 100000, maximum: 999999, example: 482731 }
+    Error:
+      type: object
+      properties:
+        detail: { type: string }
+  responses:
+    ErrorValidacion:
+      description: Datos de entrada invalidos
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NoEncontrado:
+      description: Recurso no encontrado
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflicto:
+      description: La operacion viola una regla de negocio
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ServicioNoDisponible:
+      description: Base de datos o broker no disponible
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }

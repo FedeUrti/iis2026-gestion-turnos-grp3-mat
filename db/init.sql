@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS personal (
 );
 
 CREATE TABLE IF NOT EXISTS reserva (
-    id_reserva INT AUTO_INCREMENT PRIMARY KEY,
+    id_reserva INT PRIMARY KEY,
     fecha_reservado TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     email_solicitante VARCHAR(100) NOT NULL,
     telefono_solicitante VARCHAR(50) NOT NULL,

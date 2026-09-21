@@ -37,13 +37,14 @@ def validar_y_procesar_turno(datos_msg):
     Valida los datos del turno y lo procesa si es válido, cumpliendo las reglas de negocio de la letra.
     """
     turno = datos_msg.get('turno', {})
+    id_reserva = turno.get('id')
     id_personal = turno.get('idPersonal')
     email = turno.get('email_cliente')
     telefono = turno.get('telefono_cliente')
     fecha_str = turno.get('fecha')
     hora_str = turno.get('hora')
 
-    if not all([id_personal, email, fecha_str, hora_str]):
+    if not all([id_reserva, id_personal, email, fecha_str, hora_str]):
         print("[RECHAZADO] Datos del turno incompletos.")
         return
 
@@ -112,13 +113,14 @@ def validar_y_procesar_turno(datos_msg):
         # --- SI SUPERA TODAS LAS VALIDACIONES: Guardar en DB ---
         query_insert = """
             INSERT INTO reserva (
-                email_solicitante, telefono_solicitante, id_personal,
+                id_reserva, email_solicitante, telefono_solicitante, id_personal,
                 fecha_turno, hora_turno, estado_reserva
-            ) VALUES (%s, %s, %s, %s, %s, 'RESERVADO');
+            ) VALUES (%s, %s, %s, %s, %s, %s, 'RESERVADO');
         """
         cursor.execute(
             query_insert,
             (
+                id_reserva,
                 email,
                 str(telefono),
                 id_personal,
