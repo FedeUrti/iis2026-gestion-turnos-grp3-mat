@@ -25,21 +25,38 @@ def crear_reserva(reserva: ReservaCreate, db = Depends(get_db)):
     # 1. Validación Síncrona: Verificar si el profesional existe y está activo
     cursor.execute("SELECT id_personal, activo FROM personal WHERE id_personal = %s", (reserva.id_personal,))
     profesional = cursor.fetchone()
-    cursor.close()
 
     if not profesional:
+        cursor.close()
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, 
             detail=f"Error: El profesional con ID {reserva.id_personal} no existe en la base de datos."
         )
     
     if not profesional['activo']:
+        cursor.close()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, 
             detail=f"Error: El profesional con ID {reserva.id_personal} se encuentra inactivo."
         )
 
-    # 2. Si pasa las validaciones, generar ID y enviar a MQTT
+    # 2. Validación Síncrona: Verificar si el turno ya está ocupado
+    query_check = """
+        SELECT id_reserva FROM reserva 
+        WHERE id_personal = %s AND fecha_turno = %s AND hora_turno = %s
+    """
+    cursor.execute(query_check, (reserva.id_personal, reserva.fecha_turno, reserva.hora_turno))
+    reserva_existente = cursor.fetchone()
+    cursor.close()
+
+    if reserva_existente:
+        id_existente = reserva_existente["id_reserva"]
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Reserva: {id_existente} ya existe en ese horario. Elimine y reinserte o modifique dicha reserva."
+        )
+
+    # 3. Si pasa las validaciones, generar ID y enviar a MQTT
     id_reserva = secrets.randbelow(900000) + 100000
     
     payload_mqtt = {
