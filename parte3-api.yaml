@@ -43,6 +43,7 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SolicitudReserva' }
+        '409': { $ref: '#/components/responses/Conflicto' } 
         '422': { $ref: '#/components/responses/ErrorValidacion' }
         '503': { $ref: '#/components/responses/ServicioNoDisponible' }
 
@@ -335,6 +336,9 @@ components:
         telefono: { type: string, example: "099111222" }
         cargo: { type: string, example: "Doctor" }
         id_establecimiento: { type: integer, example: 1 }
+        especialidad: { type: string, example: "Pediatría" }
+        costo_consulta: { type: number, example: 2000.00 }  
+        activo: { type: boolean, example: true }
 
     PersonalUpdate:
       type: object

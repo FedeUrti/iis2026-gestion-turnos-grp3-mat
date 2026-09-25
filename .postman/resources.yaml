@@ -1,0 +1,7 @@
+# Use this workspace to collaborate
+workspace:
+  id: d2b9959d-558a-453e-8762-d0cb941b2c76
+
+localResources:
+  specs:
+    - ../parte3-api.yaml
