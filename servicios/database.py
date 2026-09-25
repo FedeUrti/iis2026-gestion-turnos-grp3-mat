@@ -1,6 +1,9 @@
-import os, json, mysql.connector.pooling, paho.mqtt.client as mqtt
+import os
+import json
+import mysql.connector.pooling
+import paho.mqtt.client as mqtt
 
-# Pool de MySQL (reutiliza conexiones en producción)
+# Pool de MySQL (se reutilizan conexiones)
 db_pool = mysql.connector.pooling.MySQLConnectionPool(
     pool_name="uruturn_pool",
     pool_size=10,
@@ -11,19 +14,37 @@ db_pool = mysql.connector.pooling.MySQLConnectionPool(
     password=os.getenv("DB_PASSWORD", "uruturn_password"),
 )
 
-# Cliente MQTT persistente (reutiliza la misma conexión TCP)
+# Cliente MQTT global
 mqtt_client = mqtt.Client()
-mqtt_client.connect(os.getenv("MQTT_HOST", "mosquitto"), 1883, 60)
-mqtt_client.loop_start()
+
+def conectar_mqtt():
+    """Inicia la conexión MQTT al arrancar FastAPI."""
+    try:
+        mqtt_client.connect(
+            os.getenv("MQTT_HOST", "mosquitto"),
+            int(os.getenv("MQTT_PORT", "1883")),
+            keepalive=60
+        )
+        mqtt_client.loop_start()
+    except Exception as e:
+        print(f"[MQTT] Advertencia: No se pudo conectar a Mosquitto: {e}")
+
+def desconectar_mqtt():
+    """Cierra la conexión MQTT al apagar FastAPI."""
+    try:
+        mqtt_client.loop_stop()
+        mqtt_client.disconnect()
+    except Exception:
+        pass
 
 def get_db():
-    """Generator que entrega una conexión del pool y la devuelve automáticamente al finalizar."""
+    """Inyección de dependencia para endpoints."""
     conn = db_pool.get_connection()
     try:
         yield conn
     finally:
-        conn.close() # Vuelve al pool, no se destruye
+        conn.close()
 
 def publicar_mqtt(topic: str, payload: dict):
-    """Publica usando el cliente global ya conectado."""
+    """Función para publicar mensajes."""
     mqtt_client.publish(topic, json.dumps(payload), qos=1)

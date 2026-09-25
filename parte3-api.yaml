@@ -1,19 +1,22 @@
 openapi: 3.0.3
 info:
-  title: API  UruTurn
+  title: API UruTurn
   version: 1.0.0
-  description: API REST de reservas, establecimientos y personal. Las altas de reservas se publican en MQTT y el consumidor las persiste en MySQL.
+  description: API REST de reservas, establecimientos y personal.
 servers:
   - url: http://localhost:8000
 tags:
   - name: reservas
+  - name: establecimientos
+  - name: personal
+
 paths:
   /reservas:
     get:
       tags: [reservas]
       summary: Listar reservas
       parameters:
-        - $ref: '#/components/parameters/IdPersonal'
+        - $ref: '#/components/parameters/IdPersonalQuery'
         - $ref: '#/components/parameters/FechaTurno'
         - $ref: '#/components/parameters/EstadoReserva'
       responses:
@@ -28,7 +31,7 @@ paths:
     post:
       tags: [reservas]
       summary: Solicitar una reserva
-      description: Publica la solicitud en turnos/solicitudes para que el consumidor la valide y persista.
+      description: Publica la solicitud en MQTT para que el consumidor la procese.
       requestBody:
         required: true
         content:
@@ -42,6 +45,7 @@ paths:
               schema: { $ref: '#/components/schemas/SolicitudReserva' }
         '422': { $ref: '#/components/responses/ErrorValidacion' }
         '503': { $ref: '#/components/responses/ServicioNoDisponible' }
+
   /reservas/{id_reserva}:
     parameters:
       - $ref: '#/components/parameters/IdReserva'
@@ -79,11 +83,10 @@ paths:
         '204': { description: Reserva eliminada }
         '404': { $ref: '#/components/responses/NoEncontrado' }
 
-    /establecimientos:
+  /establecimientos:
     get:
       tags: [establecimientos]
       summary: Listar establecimientos
-      description: Obtiene la lista completa de establecimientos.
       responses:
         '200':
           description: Lista de establecimientos
@@ -104,10 +107,6 @@ paths:
       responses:
         '201':
           description: Establecimiento creado correctamente
-          headers:
-            Location:
-              schema: { type: string }
-              description: URI del recurso creado (/establecimientos/{id_establecimiento})
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Establecimiento' }
@@ -127,7 +126,6 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Establecimiento' }
         '404': { $ref: '#/components/responses/NoEncontrado' }
-        '503': { $ref: '#/components/responses/ServicioNoDisponible' }
     put:
       tags: [establecimientos]
       summary: Actualizar un establecimiento
@@ -144,14 +142,83 @@ paths:
               schema: { $ref: '#/components/schemas/Establecimiento' }
         '400': { $ref: '#/components/responses/ErrorValidacion' }
         '404': { $ref: '#/components/responses/NoEncontrado' }
-        '503': { $ref: '#/components/responses/ServicioNoDisponible' }
     delete:
       tags: [establecimientos]
       summary: Eliminar un establecimiento
       responses:
         '204': { description: Establecimiento eliminado }
         '404': { $ref: '#/components/responses/NoEncontrado' }
-        '503': { $ref: '#/components/responses/ServicioNoDisponible' }
+
+  /personal:
+    get:
+      tags: [personal]
+      summary: Listar personal
+      parameters:
+        - name: id_establecimiento
+          in: query
+          schema: { type: integer }
+        - name: cargo
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Lista de miembros del personal
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Personal' }
+    post:
+      tags: [personal]
+      summary: Crear miembro del personal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PersonalCreate' }
+      responses:
+        '201':
+          description: Creado exitosamente
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Personal' }
+
+  /personal/{id_personal}:
+    parameters:
+      - name: id_personal
+        in: path
+        required: true
+        schema: { type: integer }
+    get:
+      tags: [personal]
+      summary: Obtener personal
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Personal' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+    put:
+      tags: [personal]
+      summary: Actualizar personal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PersonalUpdate' }
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Personal' }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+    delete:
+      tags: [personal]
+      summary: Eliminar personal
+      responses:
+        '204': { description: Eliminado }
+        '404': { $ref: '#/components/responses/NoEncontrado' }
+
 components:
   parameters:
     IdReserva:
@@ -159,7 +226,7 @@ components:
       in: path
       required: true
       schema: { type: integer, minimum: 1 }
-    IdPersonal:
+    IdPersonalQuery:
       name: id_personal
       in: query
       schema: { type: integer, minimum: 1 }
@@ -176,6 +243,7 @@ components:
       in: path
       required: true
       schema: { type: integer, minimum: 1 }
+
   schemas:
     ReservaCreate:
       type: object
@@ -186,6 +254,7 @@ components:
         id_personal: { type: integer, minimum: 1, example: 1 }
         fecha_turno: { type: string, format: date, example: '2026-10-01' }
         hora_turno: { type: string, format: time, example: '10:00:00' }
+
     ReservaUpdate:
       type: object
       additionalProperties: false
@@ -196,6 +265,7 @@ components:
         fecha_turno: { type: string, format: date }
         hora_turno: { type: string, format: time }
         estado_reserva: { $ref: '#/components/schemas/EstadoReserva' }
+
     Reserva:
       allOf:
         - $ref: '#/components/schemas/ReservaCreate'
@@ -205,15 +275,18 @@ components:
             id_reserva: { type: integer, example: 1 }
             fecha_reservado: { type: string, format: date-time }
             estado_reserva: { $ref: '#/components/schemas/EstadoReserva' }
+
     EstadoReserva:
       type: string
       enum: [RESERVADO, CANCELADO, FINALIZADO]
+
     SolicitudReserva:
       type: object
       required: [mensaje, turno]
       properties:
-        mensaje: { type: string, example: Solicitud publicada; el consumidor la procesara }
+        mensaje: { type: string, example: Solicitud publicada; el consumidor la procesará }
         turno: { $ref: '#/components/schemas/TurnoPublicado' }
+
     TurnoPublicado:
       allOf:
         - $ref: '#/components/schemas/ReservaCreate'
@@ -221,15 +294,10 @@ components:
           required: [id]
           properties:
             id: { type: integer, minimum: 100000, maximum: 999999, example: 482731 }
+
     EstablecimientoCreate:
       type: object
-      required:
-        - nombre_comercial
-        - direccion
-        - telefono
-        - correo_electronico
-        - horario_apertura
-        - horario_cierre
+      required: [nombre_comercial, direccion, telefono, correo_electronico, horario_apertura, horario_cierre]
       properties:
         nombre_comercial: { type: string, maxLength: 150, example: "Clínica Central" }
         direccion: { type: string, maxLength: 255, example: "Av. Brasil 2530" }
@@ -256,13 +324,45 @@ components:
           required: [id_establecimiento]
           properties:
             id_establecimiento: { type: integer, example: 1 }
+
+    PersonalCreate:
+      type: object
+      required: [nombre, apellido, email, telefono, cargo, id_establecimiento]
+      properties:
+        nombre: { type: string, example: "Juan" }
+        apellido: { type: string, example: "Pérez" }
+        email: { type: string, format: email, example: "juan.perez@email.com" }
+        telefono: { type: string, example: "099111222" }
+        cargo: { type: string, example: "Doctor" }
+        id_establecimiento: { type: integer, example: 1 }
+
+    PersonalUpdate:
+      type: object
+      additionalProperties: false
+      properties:
+        nombre: { type: string }
+        apellido: { type: string }
+        email: { type: string, format: email }
+        telefono: { type: string }
+        cargo: { type: string }
+        id_establecimiento: { type: integer }
+
+    Personal:
+      allOf:
+        - $ref: '#/components/schemas/PersonalCreate'
+        - type: object
+          required: [id_personal]
+          properties:
+            id_personal: { type: integer, example: 1 }
+
     Error:
       type: object
       properties:
         detail: { type: string }
+
   responses:
     ErrorValidacion:
-      description: Datos de entrada invalidos
+      description: Datos de entrada inválidos
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -272,7 +372,7 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
     Conflicto:
-      description: La operacion viola una regla de negocio
+      description: La operación viola una regla de negocio
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }

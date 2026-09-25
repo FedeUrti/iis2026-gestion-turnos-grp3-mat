@@ -1,17 +1,16 @@
-Python
-
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 
-# Importas los routers de cada módulo
+from database import conectar_mqtt, desconectar_mqtt
 from routers import reservas, establecimientos, personal
 
-# Si manejas el ciclo de vida (lifespan) con la conexión a MySQL y MQTT:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Inicializar pool de base de datos y MQTT aquí
+    # Al arrancar la aplicación
+    conectar_mqtt()
     yield
-    # Cerrar conexiones aquí
+    # Al apagar la aplicación
+    desconectar_mqtt()
 
 app = FastAPI(
     title="API UruTurn",
@@ -20,7 +19,7 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Incluyes los routers en la aplicación principal
+# Registrar Routers
 app.include_router(reservas.router)
 app.include_router(establecimientos.router)
 app.include_router(personal.router)
