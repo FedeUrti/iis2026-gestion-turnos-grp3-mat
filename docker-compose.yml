@@ -88,7 +88,7 @@ services:
   # API REST de Reservas
   reservas-api:
     build:
-      context: ./servicios/reservas
+      context: ./servicios
       dockerfile: Dockerfile
     container_name: reservas_api
     restart: unless-stopped

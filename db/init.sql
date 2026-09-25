@@ -9,19 +9,27 @@ CREATE TABLE IF NOT EXISTS establecimiento (
     telefono VARCHAR(50) NOT NULL,
     correo_electronico VARCHAR(100) NOT NULL,
     horario_apertura TIME NOT NULL,
-    horario_cierre TIME NOT NULL
+    horario_cierre TIME NOT NULL,
+    -- Impide duplicar el nombre comercial
+    CONSTRAINT uk_establecimiento_nombre UNIQUE (nombre_comercial)
 );
 
 CREATE TABLE IF NOT EXISTS personal (
     id_personal INT AUTO_INCREMENT PRIMARY KEY,
     id_establecimiento INT NOT NULL,
     nombre VARCHAR(150) NOT NULL,
-    especialidad VARCHAR(100) NOT NULL,
-    costo_consulta NUMERIC(10, 2) NOT NULL,
+    apellido VARCHAR(150) NOT NULL DEFAULT '', -- DEFAULT '' evita NULL para que UNIQUE aplique
+    email VARCHAR(100),
+    telefono VARCHAR(50),
+    cargo VARCHAR(100),
+    especialidad VARCHAR(100) DEFAULT 'General',
+    costo_consulta NUMERIC(10, 2) DEFAULT 0.00,
     duracion_atencion INT NOT NULL DEFAULT 30,
     activo BOOLEAN NOT NULL DEFAULT TRUE,
     CONSTRAINT fk_establecimiento FOREIGN KEY (id_establecimiento) REFERENCES establecimiento(id_establecimiento) ON DELETE CASCADE,
-    CONSTRAINT ck_duracion_atencion CHECK (duracion_atencion = 30)
+    CONSTRAINT ck_duracion_atencion CHECK (duracion_atencion = 30),
+    -- Impide duplicar la combinación de nombre y apellido
+    CONSTRAINT uk_personal_nombre_apellido UNIQUE (nombre, apellido)
 );
 
 CREATE TABLE IF NOT EXISTS reserva (
@@ -34,7 +42,6 @@ CREATE TABLE IF NOT EXISTS reserva (
     hora_turno TIME NOT NULL,
     estado_reserva ENUM('RESERVADO', 'CANCELADO', 'FINALIZADO') NOT NULL DEFAULT 'RESERVADO',
     CONSTRAINT fk_personal FOREIGN KEY (id_personal) REFERENCES personal(id_personal),
-    -- Regla de negocio: No pueden existir dos turnos para el mismo profesional en la misma fecha y hora
     CONSTRAINT uk_personal_fecha_hora UNIQUE (id_personal, fecha_turno, hora_turno)
 );
 
@@ -49,10 +56,9 @@ INSERT INTO establecimiento (
 );
 
 INSERT INTO personal (
-    id_establecimiento, nombre, especialidad, costo_consulta,
-    duracion_atencion, activo
+    id_establecimiento, nombre, apellido, email, telefono, cargo, especialidad, costo_consulta, duracion_atencion, activo
 ) VALUES
-    (1, 'Ana Pereira', 'Medicina general', 1200.00, 30, TRUE),
-    (1, 'Bruno Silva', 'Odontologia', 1500.00, 30, TRUE),
-    (1, 'Carla Rodriguez', 'Psicologia', 1300.00, 30, TRUE),
-    (1, 'Diego Mendez', 'Dermatologia', 1600.00, 30, FALSE);
+    (1, 'Ana', 'Pereira', 'ana@centrosalud.uy', '099111222', 'Médica', 'Medicina general', 1200.00, 30, TRUE),
+    (1, 'Bruno', 'Silva', 'bruno@centrosalud.uy', '099222333', 'Odontólogo', 'Odontologia', 1500.00, 30, TRUE),
+    (1, 'Carla', 'Rodriguez', 'carla@centrosalud.uy', '099333444', 'Psicóloga', 'Psicologia', 1300.00, 30, TRUE),
+    (1, 'Diego', 'Mendez', 'diego@centrosalud.uy', '099444555', 'Dermatólogo', 'Dermatologia', 1600.00, 30, FALSE);

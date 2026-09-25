@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException, Query, status, Depends
 from pydantic import BaseModel, EmailStr, Field
+from typing import Optional
 import mysql.connector
-from database import get_db  # Importa el helper compartido de base de datos
+from database import get_db
 
 router = APIRouter(prefix="/personal", tags=["personal"])
 
@@ -15,6 +16,9 @@ class PersonalBase(BaseModel):
     telefono: str = Field(min_length=6, max_length=50)
     cargo: str = Field(min_length=2, max_length=50)
     id_establecimiento: int = Field(gt=0)
+    especialidad: str = Field(default="General", max_length=100)
+    costo_consulta: float = Field(default=0.0)
+    activo: bool = Field(default=True)
 
 class PersonalCreate(PersonalBase):
     pass
@@ -26,6 +30,9 @@ class PersonalUpdate(BaseModel):
     telefono: str | None = Field(default=None, min_length=6, max_length=50)
     cargo: str | None = Field(default=None, min_length=2, max_length=50)
     id_establecimiento: int | None = Field(default=None, gt=0)
+    especialidad: str | None = Field(default=None, max_length=100)
+    costo_consulta: float | None = Field(default=None)
+    activo: bool | None = Field(default=None)
 
 # =========================
 # Endpoints REST
@@ -33,37 +40,45 @@ class PersonalUpdate(BaseModel):
 
 # 1. POST /personal -> HTTP 201 CREATED
 @router.post("", status_code=status.HTTP_201_CREATED)
-def crear_personal(personal: PersonalCreate, db = Depends(get_db)):
+def crear_personal(personal: PersonalBase, db = Depends(get_db)):
     cursor = db.cursor(dictionary=True)
+    query = """
+        INSERT INTO personal (id_establecimiento, nombre, apellido, email, telefono, cargo, especialidad, costo_consulta, activo)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+    """
+    apellido_valor = personal.apellido if personal.apellido is not None else ""
+    valores = (
+        personal.id_establecimiento, personal.nombre, apellido_valor,
+        personal.email, personal.telefono, personal.cargo,
+        personal.especialidad, personal.costo_consulta, personal.activo
+    )
     try:
-        sql = """
-            INSERT INTO personal (nombre, apellido, email, telefono, cargo, id_establecimiento)
-            VALUES (%s, %s, %s, %s, %s, %s)
-        """
-        cursor.execute(sql, (
-            personal.nombre,
-            personal.apellido,
-            str(personal.email),
-            personal.telefono,
-            personal.cargo,
-            personal.id_establecimiento,
-        ))
+        cursor.execute(query, valores)
         db.commit()
         nuevo_id = cursor.lastrowid
-
-        cursor.execute("SELECT * FROM personal WHERE id_personal = %s", (nuevo_id,))
-        nuevo = cursor.fetchone()
-        cursor.close()
-        return nuevo
-    except mysql.connector.IntegrityError as err:
+        return {"id_personal": nuevo_id, **personal.model_dump()}
+    except mysql.connector.Error as err:
         db.rollback()
+        if err.errno == 1062:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"Ya existe un profesional registrado con el nombre '{personal.nombre} {apellido_valor}'"
+            )
+        if err.errno == 1452:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No existe ningún establecimiento registrado con el ID {personal.id_establecimiento}"
+            )
+        if err.errno == 1054:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Estructura de base de datos desactualizada. Ejecuta 'docker compose down -v'."
+            )
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(err))
+    finally:
         cursor.close()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Error de integridad: verifique si existe el id_establecimiento o el email. ({err})"
-        )
 
-# 2. GET /personal -> HTTP 200 OK (Filtros opcionales por id_establecimiento o cargo)
+# 2. GET /personal -> HTTP 200 OK
 @router.get("")
 def listar_personal(
     id_establecimiento: int | None = Query(default=None, gt=0),
