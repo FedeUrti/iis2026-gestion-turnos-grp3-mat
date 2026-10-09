@@ -96,35 +96,6 @@ bash scripts/test-reservas.sh
 
 Este script hace una solicitud de ejemplo a `POST /reservas`, espera el siguiente ciclo de FastAPI y consulta el resultado en la API y en MySQL.
 
-## Inicializar o actualizar la base de datos
-
-`db/init-completo.sql` es el único init que Docker monta y ejecuta al inicializar
-un volumen MySQL vacío. Incluye todas las tablas y datos de ejemplo, por lo que
-una instalación nueva no necesita ejecutar archivos `migrate-*.sql`.
-
-Si el volumen ya existe, MySQL no vuelve a ejecutar el init. Para recrear la base
-con el esquema completo, se puede usar el script interactivo:
-
-```powershell
-.\scripts\reiniciar-bd.ps1
-```
-
-Este proceso elimina las reservas y facturas existentes. No lo ejecutes si
-necesitás conservar esos datos.
-
-Los scripts `migrate-*.sql` son históricos y están archivados junto con el init
-anterior en `db/.deprecated/`, carpeta ignorada por Git. Para una base existente
-que necesite conservar datos y todavía no tenga el esquema actual, no ejecutes
-un reinicio: prepara una migración específica para esa base. El init completo
-está destinado a instalaciones nuevas o a reinicializar una base descartable.
-
-### Reiniciar la base de datos para pruebas
-
-`docker compose down` conserva el volumen MySQL y sus datos. Para recrear solo la
-base desde cero, usa el comando de `.\scripts\reiniciar-bd.ps1` indicado arriba.
-El script pide escribir `BORRAR` antes de continuar, elimina únicamente el
-volumen MySQL y vuelve a levantar el entorno. Se pierden las reservas y facturas existentes; los volúmenes de Mosquitto y phpMyAdmin se
-conservan.
 
 ## Autores
 
