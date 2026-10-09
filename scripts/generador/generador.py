@@ -4,10 +4,57 @@ import json
 import random
 from datetime import datetime, timedelta
 import paho.mqtt.client as mqtt
+import mysql.connector
 
 MQTT_HOST = os.getenv("MQTT_HOST", "localhost")
 MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
 MQTT_TOPIC = os.getenv("MQTT_TOPIC", "turnos/solicitudes")
+
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_PORT = int(os.getenv("DB_PORT", "3306"))
+DB_NAME = os.getenv("DB_NAME", "uruturn_db")
+DB_USER = os.getenv("DB_USER", "uruturn_user")
+DB_PASSWORD = os.getenv("DB_PASSWORD", "uruturn_password")
+
+
+def obtener_datos_generacion():
+    """Obtiene profesionales válidos e IDs ya ocupados para nuevos eventos."""
+    while True:
+        try:
+            conn = mysql.connector.connect(
+                host=DB_HOST,
+                port=DB_PORT,
+                database=DB_NAME,
+                user=DB_USER,
+                password=DB_PASSWORD,
+            )
+            try:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT id_establecimiento, id_personal
+                    FROM personal
+                    WHERE activo = TRUE
+                    ORDER BY id_establecimiento, id_personal
+                    """
+                )
+                profesionales = cursor.fetchall()
+                cursor.execute(
+                    """
+                    SELECT id_reserva FROM reserva
+                    """
+                )
+                ids_ocupados = {row[0] for row in cursor.fetchall()}
+                cursor.close()
+            finally:
+                conn.close()
+
+            if not profesionales:
+                raise RuntimeError("No hay profesionales activos para generar turnos.")
+            return profesionales, ids_ocupados
+        except mysql.connector.Error as err:
+            print(f"[WARNING] Esperando a que MySQL esté listo: {err}")
+            time.sleep(3)
 
 
 def generador_turno_random():
@@ -15,8 +62,11 @@ def generador_turno_random():
     Crea un diccionar Python respetando la estructura JSON del Anexo.
     Está separada en una función para poder ser llamada desde otro script.
     """
-    id_turno = random.randint(100, 999)
-    id_personal = random.randint(1, 4)
+    profesionales, ids_ocupados = obtener_datos_generacion()
+    id_turno = random.randint(100_000, 2_000_000_000)
+    while id_turno in ids_ocupados:
+        id_turno = random.randint(100_000, 2_000_000_000)
+    id_establecimiento, id_personal = random.choice(profesionales)
     telefonos = [111111111, 222222222, 333333333, 444444444]
     emails = ["cliente1@gmail.com", "cliente2@yahoo.com", "cliente3@outlook.com"]
     dias_futuros = random.randint(1,7)
@@ -30,6 +80,7 @@ def generador_turno_random():
             "id": id_turno,
             "email_cliente": random.choice(emails),
             "telefono_cliente": random.choice(telefonos),
+            "idEstablecimiento": id_establecimiento,
             "idPersonal": id_personal,
             "fecha": fecha_turno.strftime("%Y-%m-%d"),
             "hora": hora_aleatoria
@@ -66,7 +117,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
 

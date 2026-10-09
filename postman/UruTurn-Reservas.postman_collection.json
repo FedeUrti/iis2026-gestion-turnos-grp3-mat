@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Uru Turn - API de Reservas",
-    "description": "Pruebas Postman de la API de Reservas. El POST publica en MQTT y el consumidor persiste en MySQL.",
+    "description": "Pruebas Postman de la API de Reservas. El POST guarda una solicitud que FastAPI procesa periódicamente.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -15,7 +15,7 @@
     },
     {
       "key": "fechaTurno",
-      "value": "2026-10-02"
+      "value": "2026-10-20"
     }
   ],
   "item": [
@@ -43,6 +43,9 @@
               "    pm.response.to.have.status(202);",
               "});",
               "const respuesta = pm.response.json();",
+              "pm.test('La solicitud queda pendiente', function () {",
+              "    pm.expect(respuesta.turno.estado_reserva).to.eql('PENDIENTE');",
+              "});",
               "pm.collectionVariables.set('reservaId', respuesta.turno.id);",
               "console.log('ID generado: ' + respuesta.turno.id);"
             ]
@@ -59,7 +62,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"email_solicitante\": \"paciente@correo.com\",\n  \"telefono_solicitante\": \"099123456\",\n  \"id_personal\": 1,\n  \"fecha_turno\": \"{{fechaTurno}}\",\n  \"hora_turno\": \"10:00:00\"\n}"
+          "raw": "{\n  \"nombre\": \"Ana Pérez\",\n  \"email_solicitante\": \"paciente@correo.com\",\n  \"telefono_solicitante\": \"099123456\",\n  \"id_establecimiento\": 1,\n  \"id_personal\": 1,\n  \"fecha_turno\": \"{{fechaTurno}}\",\n  \"hora_turno\": \"10:00:00\"\n}"
         },
         "url": {
           "raw": "{{baseUrl}}/reservas",

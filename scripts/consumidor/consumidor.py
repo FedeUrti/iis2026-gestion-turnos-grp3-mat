@@ -38,18 +38,26 @@ def validar_y_procesar_turno(datos_msg):
     """
     turno = datos_msg.get('turno', {})
     id_reserva = turno.get('id')
+    id_establecimiento = turno.get('idEstablecimiento')
     id_personal = turno.get('idPersonal')
     email = turno.get('email_cliente')
     telefono = turno.get('telefono_cliente')
     fecha_str = turno.get('fecha')
     hora_str = turno.get('hora')
 
-    if not all([id_reserva, id_personal, email, fecha_str, hora_str]):
+    if not all([
+        id_reserva, id_establecimiento, id_personal, email,
+        telefono, fecha_str, hora_str
+    ]):
         print("[RECHAZADO] Datos del turno incompletos.")
         return
 
-    # Combinar fecha y hora
     try:
+        id_reserva = int(id_reserva)
+        id_establecimiento = int(id_establecimiento)
+        id_personal = int(id_personal)
+        if min(id_reserva, id_establecimiento, id_personal) < 1:
+            raise ValueError("Los identificadores deben ser positivos.")
         fecha_hora_solicitada = datetime.strptime(
             f"{fecha_str} {hora_str}", "%Y-%m-%d %H:%M"
         )
@@ -61,78 +69,115 @@ def validar_y_procesar_turno(datos_msg):
     cursor = conn.cursor(dictionary=True)
 
     try:
-        # 1. Obtener datos del personal y del establecimiento
-        query_personal = """
-                 SELECT p.id_personal, p.activo,
-                     TIME_FORMAT(e.horario_apertura, '%H:%i') AS horario_apertura,
-                     TIME_FORMAT(e.horario_cierre, '%H:%i') AS horario_cierre
-            FROM personal p
-            JOIN establecimiento e ON p.id_establecimiento = e.id_establecimiento
-            WHERE p.id_personal = %s;
-        """
-        cursor.execute(query_personal, (id_personal,))
-        personal_info = cursor.fetchone()
-
-        if not personal_info:
-            print(f"[RECHAZADO] No existe el profesional con ID {id_personal}.")
-            return
-
-        # --- REGLA DE NEGOCIO 1: Profesional Activo ---
-        if not personal_info['activo']:
-            print(f"[RECHAZADO] El profesional {id_personal} está INACTIVO.")
-            return
-
-        # --- REGLA DE NEGOCIO 2: Horarios dentro de la agenda del establecimiento ---
-        hora_turno = fecha_hora_solicitada.time()
-        apertura = datetime.strptime(personal_info['horario_apertura'], '%H:%M').time()
-        cierre = datetime.strptime(personal_info['horario_cierre'], '%H:%M').time()
-
-        hora_fin_turno = (fecha_hora_solicitada + timedelta(minutes=30)).time()
-        if not (apertura <= hora_turno and hora_fin_turno <= cierre):
-            print(f"[RECHAZADO] Horario {hora_str} fuera de la agenda ({apertura} - {cierre}).")
-            return
-
-        # --- REGLA DE NEGOCIO 3: Sin solapamiento (turnos de 30 minutos) ---
-        query_solapamiento = """
-            SELECT id_reserva FROM reserva
-            WHERE id_personal = %s 
-              AND fecha_turno = %s
-              AND hora_turno = %s
-              AND estado_reserva = 'RESERVADO';
-        """
         cursor.execute(
-            query_solapamiento,
-            (id_personal, fecha_hora_solicitada.date(), fecha_hora_solicitada.time()),
+            """
+            SELECT id_reserva FROM reserva WHERE id_reserva = %s
+            """,
+            (id_reserva,),
         )
-        existe_turno = cursor.fetchone()
-
-        if existe_turno:
-            print(f"[RECHAZADO] Solapamiento: El profesional {id_personal} ya tiene un turno reservado a las {fecha_hora_solicitada}.")
+        if cursor.fetchone():
+            print(f"[IGNORADO] El turno con ID {id_reserva} ya fue recibido.")
             return
 
-        # --- SI SUPERA TODAS LAS VALIDACIONES: Guardar en DB ---
-        query_insert = """
-            INSERT INTO reserva (
-                id_reserva, email_solicitante, telefono_solicitante, id_personal,
-                fecha_turno, hora_turno, estado_reserva
-            ) VALUES (%s, %s, %s, %s, %s, %s, 'RESERVADO');
-        """
         cursor.execute(
-            query_insert,
+            """
+            SELECT e.id_establecimiento,
+                   p.id_personal,
+                   p.id_establecimiento AS id_establecimiento_personal,
+                   p.activo,
+                   TIME_FORMAT(e.horario_apertura, '%H:%i') AS horario_apertura,
+                   TIME_FORMAT(e.horario_cierre, '%H:%i') AS horario_cierre
+            FROM establecimiento e
+            LEFT JOIN personal p ON p.id_personal = %s
+            WHERE e.id_establecimiento = %s
+            """,
+            (id_personal, id_establecimiento),
+        )
+        datos_validacion = cursor.fetchone()
+        if not datos_validacion or not datos_validacion["id_personal"]:
+            print("[RECHAZADO] No existe el establecimiento o profesional indicado.")
+            return
+
+        estado_reserva = "RESERVADO"
+        if (
+            datos_validacion["id_establecimiento_personal"] != id_establecimiento
+            or not datos_validacion["activo"]
+            or fecha_hora_solicitada.date() < datetime.now().date()
+        ):
+            estado_reserva = "RECHAZADO_SOLICITUD_NO_VALIDA"
+        else:
+            apertura = datetime.strptime(
+                datos_validacion["horario_apertura"], "%H:%M"
+            ).time()
+            cierre = datetime.strptime(
+                datos_validacion["horario_cierre"], "%H:%M"
+            ).time()
+            fin_turno = fecha_hora_solicitada + timedelta(minutes=30)
+            if not (
+                apertura <= fecha_hora_solicitada.time()
+                and fin_turno.time() <= cierre
+                and fin_turno.date() == fecha_hora_solicitada.date()
+            ):
+                estado_reserva = "RECHAZADO_SOLICITUD_NO_VALIDA"
+            else:
+                cursor.execute(
+                    """
+                    SELECT id_reserva
+                    FROM reserva
+                    WHERE id_personal = %s
+                      AND fecha_turno = %s
+                      AND hora_turno = %s
+                      AND id_reserva != %s
+                      AND estado_reserva NOT IN (
+                          'CANCELADO',
+                          'RECHAZADO_SOLICITUD_NO_VALIDA',
+                          'RECHAZADO_TURNO_OCUPADO'
+                      )
+                    LIMIT 1
+                    """,
+                    (
+                        id_personal,
+                        fecha_hora_solicitada.date(),
+                        fecha_hora_solicitada.time(),
+                        id_reserva,
+                    ),
+                )
+                if cursor.fetchone():
+                    estado_reserva = "RECHAZADO_TURNO_OCUPADO"
+
+        cursor.execute(
+            """
+            INSERT INTO cliente (email, telefono)
+            VALUES (%s, %s)
+            ON DUPLICATE KEY UPDATE telefono = VALUES(telefono)
+            """,
+            (email, str(telefono)),
+        )
+        cursor.execute(
+            """
+            INSERT INTO reserva (
+                id_reserva, email_solicitante, telefono_solicitante,
+                id_establecimiento, id_personal, fecha_turno,
+                hora_turno, estado_reserva
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """,
             (
                 id_reserva,
                 email,
                 str(telefono),
+                id_establecimiento,
                 id_personal,
                 fecha_hora_solicitada.date(),
                 fecha_hora_solicitada.time(),
+                estado_reserva,
             ),
         )
         conn.commit()
-
-        print(f"[ACEPTADO Y PERSISTIDO] Turno guardado exitosamente para {email} con el profesional {id_personal} el {fecha_hora_solicitada}.")
-
-    except Exception as e:
+        print(
+            f"[PERSISTIDO] Turno {id_reserva}: {estado_reserva}, "
+            f"establecimiento {id_establecimiento}, profesional {id_personal}."
+        )
+    except mysql.connector.Error as e:
         conn.rollback()
         print(f"[ERROR DB] Error al procesar reserva: {e}")
     finally:

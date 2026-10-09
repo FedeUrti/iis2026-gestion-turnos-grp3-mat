@@ -2,15 +2,18 @@
 set -euo pipefail
 
 TOPIC="turnos/solicitudes"
+ID_TURNO="${ID_TURNO:-$(date +%s)}"
+FECHA_TURNO="${FECHA_TURNO:-$(date -d '+1 day' +%F)}"
 PAYLOAD='{
   "status": "turno_creado",
-  "fechaHora": "2026-09-01T10:15:00",
+  "fechaHora": "'"$(date --iso-8601=seconds)"'",
   "turno": {
-    "id": 35,
+    "id": '"$ID_TURNO"',
     "email_cliente": "a@a.com",
     "telefono_cliente": 11111111,
-    "idPersonal": 8,
-    "fecha": "2026-09-15",
+    "idEstablecimiento": 1,
+    "idPersonal": 1,
+    "fecha": "'"$FECHA_TURNO"'",
     "hora": "14:30"
   }
 }'

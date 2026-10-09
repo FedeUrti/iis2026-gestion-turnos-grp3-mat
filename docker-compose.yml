@@ -25,7 +25,7 @@ services:
       - "3307:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./db/init-completo.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -proot_password"]
       interval: 5s
@@ -60,8 +60,16 @@ services:
       MQTT_HOST: mosquitto
       MQTT_PORT: 1883
       MQTT_TOPIC: turnos/solicitudes
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: uruturn_db
+      DB_USER: uruturn_user
+      DB_PASSWORD: uruturn_password
     depends_on:
-      - mosquitto
+      mosquitto:
+        condition: service_started
+      db:
+        condition: service_healthy
 
   # Servicio Consumidor de Turnos (Python)
   consumidor:
@@ -93,9 +101,8 @@ services:
     container_name: reservas_api
     restart: unless-stopped
     environment:
-      MQTT_HOST: mosquitto
-      MQTT_PORT: 1883
-      MQTT_TOPIC: turnos/solicitudes
+      TURNOS_INTERVAL_SECONDS: ${TURNOS_INTERVAL_SECONDS:-60}
+      FACTURAS_INTERVAL_SECONDS: ${FACTURAS_INTERVAL_SECONDS:-300}
       DB_HOST: db
       DB_PORT: 3306
       DB_NAME: uruturn_db
@@ -106,8 +113,6 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      mosquitto:
-        condition: service_started
 
 volumes:
   mosquitto_data:

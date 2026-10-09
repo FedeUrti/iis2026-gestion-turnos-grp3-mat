@@ -76,28 +76,32 @@ echo -e "\n[RESERVAS] -> POST: Solicitando turno exitoso..."
 curl -s -X POST $BASE_URL/reservas \
   -H "Content-Type: application/json" \
   -d '{
+    "nombre": "Ana Ejemplo",
     "email_solicitante": "paciente@gmail.com",
     "telefono_solicitante": "099444333",
+    "id_establecimiento": 1,
     "id_personal": 1,
     "fecha_turno": "2026-12-05",
     "hora_turno": "10:00:00"
   }'
 echo -e "\n"
 
-echo "[RESERVAS] -> POST: Forzando error (409 Conflict) por turno duplicado..."
+echo "[RESERVAS] -> POST: Enviando otra solicitud para el mismo horario..."
 curl -s -X POST $BASE_URL/reservas \
   -H "Content-Type: application/json" \
   -d '{
+    "nombre": "Bruno Ejemplo",
     "email_solicitante": "otro.paciente@gmail.com",
     "telefono_solicitante": "099888999",
+    "id_establecimiento": 1,
     "id_personal": 1,
     "fecha_turno": "2026-12-05",
     "hora_turno": "10:00:00"
   }'
 echo -e "\n"
 
-echo "[RESERVAS] -> GET: Listando reservas (esperando que el consumidor MQTT haya guardado)..."
-sleep 2 # Damos 2 segundos para que Mosquitto procese el mensaje
+echo "[RESERVAS] -> GET: Esperando el próximo ciclo del worker de FastAPI..."
+sleep "$((${TURNOS_INTERVAL_SECONDS:-60} + 2))"
 curl -s -X GET $BASE_URL/reservas
 echo -e "\n"
 

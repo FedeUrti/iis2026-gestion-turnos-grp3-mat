@@ -50,13 +50,15 @@ RESP_PERSONAL=$(curl -s -X POST "${BASE_URL}/personal" \
 
 echo "$RESP_PERSONAL"
 
-# 5. SOLICITAR RESERVA VIA MQTT
-echo -e "\n${YELLOW}[5/6] Solicitando reserva (POST /reservas -> MQTT)...${NC}"
+# 5. SOLICITAR RESERVA PARA PROCESAMIENTO PERIODICO
+echo -e "\n${YELLOW}[5/6] Solicitando reserva (POST /reservas)...${NC}"
 curl -s -i -X POST "${BASE_URL}/reservas" \
   -H "Content-Type: application/json" \
   -d '{
+    "nombre": "Ana Ejemplo",
     "email_solicitante": "paciente.ejemplo@gmail.com",
     "telefono_solicitante": "091111222",
+    "id_establecimiento": 1,
     "id_personal": 1,
     "fecha_turno": "2026-10-15",
     "hora_turno": "09:30:00"
