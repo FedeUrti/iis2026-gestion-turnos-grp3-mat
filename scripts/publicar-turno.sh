@@ -10,6 +10,7 @@ PAYLOAD='{
   "turno": {
     "id": '"$ID_TURNO"',
     "email_cliente": "a@a.com",
+    "nombre_cliente": "Ana",
     "telefono_cliente": 11111111,
     "idEstablecimiento": 1,
     "idPersonal": 1,

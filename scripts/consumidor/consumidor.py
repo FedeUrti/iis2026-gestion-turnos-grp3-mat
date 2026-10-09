@@ -41,6 +41,7 @@ def validar_y_procesar_turno(datos_msg):
     id_establecimiento = turno.get('idEstablecimiento')
     id_personal = turno.get('idPersonal')
     email = turno.get('email_cliente')
+    nombre = turno.get('nombre_cliente', '')
     telefono = turno.get('telefono_cliente')
     fecha_str = turno.get('fecha')
     hora_str = turno.get('hora')
@@ -147,11 +148,13 @@ def validar_y_procesar_turno(datos_msg):
 
         cursor.execute(
             """
-            INSERT INTO cliente (email, telefono)
-            VALUES (%s, %s)
-            ON DUPLICATE KEY UPDATE telefono = VALUES(telefono)
+            INSERT INTO cliente (email, nombre, telefono)
+            VALUES (%s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                nombre = VALUES(nombre),
+                telefono = VALUES(telefono)
             """,
-            (email, str(telefono)),
+            (email, nombre, str(telefono)),
         )
         cursor.execute(
             """

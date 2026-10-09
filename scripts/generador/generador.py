@@ -69,6 +69,7 @@ def generador_turno_random():
     id_establecimiento, id_personal = random.choice(profesionales)
     telefonos = [111111111, 222222222, 333333333, 444444444]
     emails = ["cliente1@gmail.com", "cliente2@yahoo.com", "cliente3@outlook.com"]
+    nombres = ["Ana", "Bruno", "Carla", "Diego", "Lucia", "Mateo"]
     dias_futuros = random.randint(1,7)
     fecha_turno = datetime.now() + timedelta(days = dias_futuros)
 
@@ -79,6 +80,7 @@ def generador_turno_random():
         "turno":{
             "id": id_turno,
             "email_cliente": random.choice(emails),
+            "nombre_cliente": random.choice(nombres),
             "telefono_cliente": random.choice(telefonos),
             "idEstablecimiento": id_establecimiento,
             "idPersonal": id_personal,
@@ -117,4 +119,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
