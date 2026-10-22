@@ -113,6 +113,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    volumes:
+      - ./servicios/testings:/app/testings
 
 volumes:
   mosquitto_data:
