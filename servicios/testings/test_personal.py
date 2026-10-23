@@ -10,7 +10,6 @@ client = TestClient(app)
 # ---------------------------------------------------------------------------
 @pytest.mark.parametrize("datos", [
     pytest.param({
-        "id_establecimiento": 2,
         "nombre": "John",
         "apellido": "Tack",
         "email": "john.tack@hotmail.com",
@@ -22,7 +21,6 @@ client = TestClient(app)
         "activo": True
     }, id="JD09"),
     pytest.param({
-        "id_establecimiento": 2,
         "nombre": "David",
         "apellido": "Martinez",
         "email": "randomchoom77@gmail.com",
@@ -34,7 +32,6 @@ client = TestClient(app)
         "activo": True
     }, id="JD10"),
     pytest.param({
-        "id_establecimiento": 2,
         "nombre": "Sal",
         "apellido": "Fisher",
         "email": "sallyface@gmail.com",
@@ -46,7 +43,6 @@ client = TestClient(app)
         "activo": False
     }, id="JD11"),
     pytest.param({
-        "id_establecimiento": 1,
         "nombre": "Edward",
         "apellido": "Scissorhands",
         "email": "j0venm4n0sdetijer4@gmail.com",
@@ -58,9 +54,12 @@ client = TestClient(app)
         "activo": True
     }, id="JD12"),
 ])
-def test_cp08_crear_personal(datos):
-    email_unico = f"{uuid.uuid4().hex[:6]}_{datos['email']}"
-    payload = {**datos, "email": email_unico}
+def test_cp08_crear_personal(establecimiento, datos):
+    payload = {
+        **datos,
+        "id_establecimiento": establecimiento["id_establecimiento"],
+        "email": f"{uuid.uuid4().hex[:6]}_{datos['email']}"
+    }
 
     r = client.post("/personal", json=payload)
     assert r.status_code == 201, r.text
@@ -68,21 +67,17 @@ def test_cp08_crear_personal(datos):
     creado = r.json()
     assert creado["nombre"] == datos["nombre"]
     assert creado["apellido"] == datos["apellido"]
-    assert creado["id_establecimiento"] == datos["id_establecimiento"]
-    assert creado["cargo"] == datos["cargo"]
+    assert creado["id_establecimiento"] == establecimiento["id_establecimiento"]
     assert creado["activo"] == datos["activo"]
 
     client.delete(f"/personal/{creado['id_personal']}")
 
 
 # ---------------------------------------------------------------------------
-# CP09: Filtrar personal por establecimiento (JD14)
+# CP09: Filtrar personal por establecimiento
 # ---------------------------------------------------------------------------
-@pytest.mark.parametrize("filtro", [
-    pytest.param({"id_establecimiento": 1}, id="JD14"),
-])
-def test_cp09_filtrar_por_establecimiento(personal, filtro):
-    id_est = filtro["id_establecimiento"]
+def test_cp09_filtrar_por_establecimiento(personal):
+    id_est = personal["id_establecimiento"]
 
     r = client.get("/personal", params={"id_establecimiento": id_est})
     assert r.status_code == 200
@@ -92,13 +87,10 @@ def test_cp09_filtrar_por_establecimiento(personal, filtro):
 
 
 # ---------------------------------------------------------------------------
-# CP09: Filtrar personal por cargo (JD15)
+# CP09: Filtrar personal por cargo
 # ---------------------------------------------------------------------------
-@pytest.mark.parametrize("filtro", [
-    pytest.param({"cargo": "Psicólogo"}, id="JD15"),
-])
-def test_cp09_filtrar_por_cargo(personal, filtro):
-    cargo_buscado = filtro["cargo"]
+def test_cp09_filtrar_por_cargo(personal):
+    cargo_buscado = personal["cargo"]
 
     r = client.get("/personal", params={"cargo": cargo_buscado})
     assert r.status_code == 200

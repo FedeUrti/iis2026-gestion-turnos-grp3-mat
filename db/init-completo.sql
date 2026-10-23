@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS personal (
     costo_consulta NUMERIC(10, 2) DEFAULT 0.00,
     duracion_atencion INT NOT NULL DEFAULT 30,
     activo BOOLEAN NOT NULL DEFAULT TRUE,
-    CONSTRAINT fk_establecimiento FOREIGN KEY (id_establecimiento) REFERENCES establecimiento(id_establecimiento) ON DELETE CASCADE,
+    CONSTRAINT fk_establecimiento FOREIGN KEY (id_establecimiento) REFERENCES establecimiento(id_establecimiento),
     CONSTRAINT ck_duracion_atencion CHECK (duracion_atencion = 30),
     -- Impide duplicar la combinación de nombre y apellido
     CONSTRAINT uk_personal_nombre_apellido UNIQUE (nombre, apellido)

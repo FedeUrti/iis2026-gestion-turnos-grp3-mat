@@ -115,6 +115,7 @@ services:
         condition: service_healthy
     volumes:
       - ./servicios/testings:/app/testings
+      - ./scripts/consumidor/consumidor.py:/app/consumidor.py
 
 volumes:
   mosquitto_data:
