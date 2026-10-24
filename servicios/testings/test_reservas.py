@@ -1,3 +1,4 @@
+from datetime import date, timedelta
 import uuid
 import pytest
 from fastapi.testclient import TestClient
@@ -75,10 +76,25 @@ def test_cp11_profesional_inexistente(personal):
 
 def test_cp12_otro_establecimiento(personal, establecimiento):
     payload = armar_payload(JD16, personal)
-    # Se pasa un ID de establecimiento diferente al del personal
-    payload["id_establecimiento"] = establecimiento["id_establecimiento"] + 999
-    r = client.post("/reservas", json=payload)
-    assert r.status_code == 400
+    r_otro = client.post("/establecimientos", json={
+        "nombre_comercial": f"Otro establecimiento {uuid.uuid4().hex[:8]}",
+        "direccion": "Calle Alternativa 123",
+        "telefono": "099123456",
+        "correo_electronico": f"otro.{uuid.uuid4().hex[:8]}@example.com",
+        "horario_apertura": "08:00:00",
+        "horario_cierre": "18:00:00",
+    })
+    assert r_otro.status_code == 201, r_otro.text
+    id_otro_establecimiento = r_otro.json()["id_establecimiento"]
+
+    try:
+        assert id_otro_establecimiento != establecimiento["id_establecimiento"]
+        payload["id_establecimiento"] = id_otro_establecimiento
+        r = client.post("/reservas", json=payload)
+        assert r.status_code == 400
+        assert "no pertenece" in str(r.json()["detail"])
+    finally:
+        client.delete(f"/establecimientos/{id_otro_establecimiento}")
 
 def test_cp13_profesional_inactivo(establecimiento):
     # Crear un personal inactivo
@@ -122,12 +138,43 @@ def test_cp15_fuera_de_horario(personal, datos):
     try:
         id_reserva = crear(datos, personal)
         ids.append(id_reserva)
-        
-        # ⚠️ AQUÍ ESTÁ EL SECRETO: 
-        # Forzamos al worker a procesar la cola antes de consultar el estado
-        procesar_reservas_pendientes() 
-        
-        assert estado(id_reserva) == "AGENDADO" if datos == JD26 else "RECHAZADO_TURNO_OCUPADO"
+        procesar_reservas_pendientes()
+
+        esperado = (
+            "AGENDADO"
+            if datos == JD26
+            else "RECHAZADO_SOLICITUD_NO_VALIDA"
+        )
+        assert estado(id_reserva) == esperado
+    finally:
+        borrar(*ids)
+
+def test_cp16_listar_reservas_ordenadas(personal):
+    ids = []
+    fecha_primera = (date.today() + timedelta(days=9)).isoformat()
+    fecha_segunda = (date.today() + timedelta(days=8)).isoformat()
+    datos = {
+        "telefono_solicitante": "099111111",
+        "nombre": "Cliente listado",
+        "hora_turno": "10:00:00",
+    }
+
+    try:
+        ids.append(crear({
+            **datos,
+            "email_solicitante": f"cp16.1.{uuid.uuid4().hex[:8]}@example.com",
+            "fecha_turno": fecha_primera,
+        }, personal))
+        ids.append(crear({
+            **datos,
+            "email_solicitante": f"cp16.2.{uuid.uuid4().hex[:8]}@example.com",
+            "fecha_turno": fecha_segunda,
+        }, personal))
+
+        r = client.get("/reservas")
+        assert r.status_code == 200
+        ids_en_respuesta = [reserva["id_reserva"] for reserva in r.json()]
+        assert ids_en_respuesta.index(ids[1]) < ids_en_respuesta.index(ids[0])
     finally:
         borrar(*ids)
 
@@ -145,16 +192,35 @@ def test_cp17_cancelar_reserva(personal):
 
 def test_cp18_cancelado_no_bloquea_el_horario(personal):
     ids = []
+    fecha = (date.today() + timedelta(days=14)).isoformat()
+    datos_primera = {
+        "email_solicitante": f"cp18.1.{uuid.uuid4().hex[:8]}@example.com",
+        "telefono_solicitante": "099111111",
+        "fecha_turno": fecha,
+        "nombre": "Cliente CP18 uno",
+        "hora_turno": "10:00:00",
+    }
+    datos_segunda = {
+        **datos_primera,
+        "email_solicitante": f"cp18.2.{uuid.uuid4().hex[:8]}@example.com",
+        "nombre": "Cliente CP18 dos",
+    }
+    cancelar = {
+        "estado_reserva": "CANCELADO",
+        "fecha_turno": fecha,
+        "hora_turno": "10:00:00",
+    }
+
     try:
-        primera = crear(JD20, personal)
+        primera = crear(datos_primera, personal)
         ids.append(primera)
         procesar_reservas_pendientes()
         assert estado(primera) == "AGENDADO"
 
-        r = client.put(f"/reservas/{primera}", json=JD28)
+        r = client.put(f"/reservas/{primera}", json=cancelar)
         assert r.status_code == 200, r.text
 
-        segunda = crear(JD29, personal)
+        segunda = crear(datos_segunda, personal)
         ids.append(segunda)
         procesar_reservas_pendientes()
         assert estado(segunda) == "AGENDADO"

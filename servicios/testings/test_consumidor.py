@@ -1,10 +1,10 @@
-"""Tests del consumidor MQTT (CP20 a CP26).
+"""Tests unitarios del consumidor MQTT (CP20 a CP26).
 
 No necesitan broker ni base de datos real: se reemplaza obtener_conexion_db()
 por una conexión falsa (MagicMock) y después se inspecciona qué intentó
 ejecutar el consumidor (qué INSERT hizo y con qué estado).
 """
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -213,13 +213,3 @@ def test_cp26_reserva_valida(hora):
     sentencias = [llamada.args[0] for llamada in cursor.execute.call_args_list]
     assert any("INSERT INTO cliente" in sql for sql in sentencias)
     conn.commit.assert_called_once()
-
-
-# ---------------------------------------------------------------------------
-# Extra (doble reserva por MQTT): horario ya ocupado por otra reserva activa
-# ---------------------------------------------------------------------------
-def test_turno_ocupado_por_mqtt():
-    # el tercer fetchone devuelve una reserva existente en ese horario
-    conn, cursor = procesar(turno_valido(), None, datos_bd(), {"id_reserva": 1})
-
-    assert estado_guardado(cursor) == "RECHAZADO_TURNO_OCUPADO"

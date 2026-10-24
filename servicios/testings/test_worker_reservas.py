@@ -1,10 +1,44 @@
-from worker_reservas import procesar_reservas_pendientes
+from datetime import date, time, timedelta
+
 import pytest
 from fastapi.testclient import TestClient
 from main import app
+from worker_reservas import (
+    _horario_dentro_de_apertura,
+    procesar_reservas_pendientes,
+)
 
 
 client = TestClient(app)
+
+
+@pytest.mark.parametrize(
+    "hora, esperado",
+    [
+        ("08:00:00", True),
+        ("17:30:00", True),
+        ("07:59:00", False),
+        ("17:31:00", False),
+        ("22:00:00", False),
+    ],
+)
+def test_horario_dentro_de_apertura(hora, esperado):
+    assert _horario_dentro_de_apertura(
+        date(2026, 11, 20),
+        time.fromisoformat(hora),
+        time(8, 0),
+        time(18, 0),
+    ) is esperado
+
+
+def test_horario_mysql_timedelta():
+    assert _horario_dentro_de_apertura(
+        date(2026, 11, 20),
+        timedelta(hours=17, minutes=30),
+        timedelta(hours=8),
+        timedelta(hours=18),
+    )
+
 
 def estado(id_reserva):
     return client.get(f"/reservas/{id_reserva}").json()["estado_reserva"]

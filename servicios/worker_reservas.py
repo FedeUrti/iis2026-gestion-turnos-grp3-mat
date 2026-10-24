@@ -18,6 +18,19 @@ def _combinar_fecha_hora(fecha, hora):
     return datetime.combine(fecha, hora)
 
 
+def _horario_dentro_de_apertura(fecha, hora, apertura, cierre):
+    inicio_turno = _combinar_fecha_hora(fecha, hora)
+    inicio_apertura = _combinar_fecha_hora(fecha, apertura)
+    fin_apertura = _combinar_fecha_hora(fecha, cierre)
+    fin_turno = inicio_turno + timedelta(minutes=30)
+
+    return (
+        inicio_turno >= inicio_apertura
+        and fin_turno <= fin_apertura
+        and fin_turno.date() == fecha
+    )
+
+
 def procesar_reservas_mqtt():
     """Valida y agenda los turnos que el consumidor MQTT guardó como RESERVADO."""
     db = db_pool.get_connection()
@@ -145,7 +158,8 @@ def procesar_reservas_pendientes():
                 else:
                     cursor.execute(
                         """
-                        SELECT p.id_personal, p.activo
+                        SELECT p.id_personal, p.activo,
+                               e.horario_apertura, e.horario_cierre
                         FROM establecimiento e
                         JOIN personal p ON p.id_establecimiento = e.id_establecimiento
                         WHERE e.id_establecimiento = %s AND p.id_personal = %s
@@ -154,6 +168,13 @@ def procesar_reservas_pendientes():
                     )
                     personal = cursor.fetchone()
                     if not personal or not personal["activo"]:
+                        estado = "RECHAZADO_SOLICITUD_NO_VALIDA"
+                    elif not _horario_dentro_de_apertura(
+                        reserva["fecha_turno"],
+                        reserva["hora_turno"],
+                        personal["horario_apertura"],
+                        personal["horario_cierre"],
+                    ):
                         estado = "RECHAZADO_SOLICITUD_NO_VALIDA"
                     else:
                         cursor.execute(

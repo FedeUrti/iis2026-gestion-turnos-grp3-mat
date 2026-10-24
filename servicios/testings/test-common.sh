@@ -28,8 +28,22 @@ datetime_minutes_ago() {
 }
 
 datetime_minutes_from_now() {
-  docker compose exec -T reservas-api python -c \
-    "from datetime import datetime, timedelta, timezone; now = datetime.now(timezone(timedelta(hours=-3))).replace(second=0, microsecond=0); print((now + timedelta(minutes=int('$1') + 1)).strftime('%Y-%m-%d %H:%M:00'))"
+  docker compose exec -T reservas-api python -c "
+from datetime import datetime, timedelta, timezone
+
+ahora = datetime.now(timezone(timedelta(hours=-3))).replace(second=0, microsecond=0)
+margen = timedelta(minutes=int('$1') + 1)
+turno = ahora + margen
+apertura = turno.replace(hour=9, minute=0)
+cierre = turno.replace(hour=17, minute=0)
+
+if turno < apertura:
+    turno = apertura + margen
+elif turno + timedelta(minutes=30) > cierre:
+    turno = (turno + timedelta(days=1)).replace(hour=9, minute=0) + margen
+
+print(turno.strftime('%Y-%m-%d %H:%M:00'))
+"
 }
 
 date_next_month() {
