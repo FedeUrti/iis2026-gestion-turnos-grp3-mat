@@ -1,6 +1,14 @@
 # Documentacion tecnica local
 /docs/
 /docs/GUIA_TECNICA.md
+!/docs/
+/docs/*
+!/docs/deprecated/
+/docs/deprecated/*
+!/docs/deprecated/archivo-proyecto/
+!/docs/deprecated/archivo-proyecto/**
+/docs/deprecated/archivos-locales/
+/docs/deprecated/cache/
 /db/.deprecated/
 /scripts/reiniciar-bd.ps1
 /modelo-reservas.drawio

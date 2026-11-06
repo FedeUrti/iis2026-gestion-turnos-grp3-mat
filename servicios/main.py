@@ -11,7 +11,7 @@ import mysql.connector
 
 from routers import reservas, establecimientos, personal, facturas
 from worker_facturas import facturar_turnos_atendidos
-from worker_reservas import procesar_reservas_mqtt, procesar_reservas_pendientes
+from worker_reservas import procesar_reservas_pendientes
 
 logger = logging.getLogger(__name__)
 TURNOS_INTERVAL_SECONDS = int(os.getenv("TURNOS_INTERVAL_SECONDS", "60"))
@@ -26,12 +26,7 @@ async def procesar_turnos_periodicamente():
     while True:
         await asyncio.sleep(TURNOS_INTERVAL_SECONDS)
         try:
-            procesadas = await asyncio.to_thread(
-                lambda: (
-                    procesar_reservas_mqtt()
-                    + procesar_reservas_pendientes()
-                )
-            )
+            procesadas = await asyncio.to_thread(procesar_reservas_pendientes)
             logger.info("Ciclo de turnos completado; reservas procesadas: %s", procesadas)
         except mysql.connector.Error:
             logger.exception("Error al procesar las reservas.")

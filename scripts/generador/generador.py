@@ -1,83 +1,66 @@
-import os
-import time
 import json
+import os
 import random
+import time
 from datetime import datetime, timedelta
+
 import paho.mqtt.client as mqtt
-import mysql.connector
+import requests
 
 MQTT_HOST = os.getenv("MQTT_HOST", "localhost")
 MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
 MQTT_TOPIC = os.getenv("MQTT_TOPIC", "turnos/solicitudes")
 
-DB_HOST = os.getenv("DB_HOST", "localhost")
-DB_PORT = int(os.getenv("DB_PORT", "3306"))
-DB_NAME = os.getenv("DB_NAME", "uruturn_db")
-DB_USER = os.getenv("DB_USER", "uruturn_user")
-DB_PASSWORD = os.getenv("DB_PASSWORD", "uruturn_password")
+API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000").rstrip("/")
+API_TIMEOUT_SECONDS = float(os.getenv("API_TIMEOUT_SECONDS", "5"))
+API_RETRY_SECONDS = float(os.getenv("API_RETRY_SECONDS", "3"))
+MQTT_RETRY_SECONDS = float(os.getenv("MQTT_RETRY_SECONDS", "3"))
+PUBLICATION_INTERVAL_SECONDS = float(
+    os.getenv("PUBLICATION_INTERVAL_SECONDS", "10")
+)
 
 
 def obtener_datos_generacion():
-    """Obtiene profesionales válidos e IDs ya ocupados para nuevos eventos."""
+    """Obtiene profesionales activos a través de la API."""
     while True:
         try:
-            conn = mysql.connector.connect(
-                host=DB_HOST,
-                port=DB_PORT,
-                database=DB_NAME,
-                user=DB_USER,
-                password=DB_PASSWORD,
+            respuesta_personal = requests.get(
+                f"{API_BASE_URL}/personal",
+                timeout=API_TIMEOUT_SECONDS,
             )
-            try:
-                cursor = conn.cursor()
-                cursor.execute(
-                    """
-                    SELECT id_establecimiento, id_personal
-                    FROM personal
-                    WHERE activo = TRUE
-                    ORDER BY id_establecimiento, id_personal
-                    """
-                )
-                profesionales = cursor.fetchall()
-                cursor.execute(
-                    """
-                    SELECT id_reserva FROM reserva
-                    """
-                )
-                ids_ocupados = {row[0] for row in cursor.fetchall()}
-                cursor.close()
-            finally:
-                conn.close()
+            respuesta_personal.raise_for_status()
 
+            profesionales = [
+                (persona["id_establecimiento"], persona["id_personal"])
+                for persona in respuesta_personal.json()
+                if persona["activo"]
+            ]
             if not profesionales:
-                raise RuntimeError("No hay profesionales activos para generar turnos.")
-            return profesionales, ids_ocupados
-        except mysql.connector.Error as err:
-            print(f"[WARNING] Esperando a que MySQL esté listo: {err}")
-            time.sleep(3)
+                raise RuntimeError(
+                    "La API no tiene profesionales activos para generar turnos."
+                )
+            return profesionales
+        except requests.RequestException as err:
+            print(f"[WARNING] API no disponible; se reintentará: {err}")
+            time.sleep(API_RETRY_SECONDS)
 
 
 def generador_turno_random():
-    """
-    Crea un diccionar Python respetando la estructura JSON del Anexo.
-    Está separada en una función para poder ser llamada desde otro script.
-    """
-    profesionales, ids_ocupados = obtener_datos_generacion()
+    """Crea un mensaje con el formato MQTT acordado."""
+    profesionales = obtener_datos_generacion()
     id_turno = random.randint(100_000, 2_000_000_000)
-    while id_turno in ids_ocupados:
-        id_turno = random.randint(100_000, 2_000_000_000)
+
     id_establecimiento, id_personal = random.choice(profesionales)
     telefonos = [111111111, 222222222, 333333333, 444444444]
     emails = ["cliente1@gmail.com", "cliente2@yahoo.com", "cliente3@outlook.com"]
     nombres = ["Ana", "Bruno", "Carla", "Diego", "Lucia", "Mateo"]
-    dias_futuros = random.randint(1,7)
-    fecha_turno = datetime.now() + timedelta(days = dias_futuros)
-
+    fecha_turno = datetime.now() + timedelta(days=random.randint(1, 7))
     hora_aleatoria = f"{random.randint(9, 16):02d}:{random.choice(('00', '30'))}"
+
     return {
-        "status":"turno_creado",
-        "fechaHora": datetime.now().isoformat(timespec='seconds'),
-        "turno":{
+        "status": "turno_creado",
+        "fechaHora": datetime.now().isoformat(timespec="seconds"),
+        "turno": {
             "id": id_turno,
             "email_cliente": random.choice(emails),
             "nombre_cliente": random.choice(nombres),
@@ -85,36 +68,49 @@ def generador_turno_random():
             "idEstablecimiento": id_establecimiento,
             "idPersonal": id_personal,
             "fecha": fecha_turno.strftime("%Y-%m-%d"),
-            "hora": hora_aleatoria
-        }
+            "hora": hora_aleatoria,
+        },
     }
 
+
+def conectar_mqtt(client):
+    while True:
+        try:
+            client.connect(MQTT_HOST, MQTT_PORT, 60)
+            return
+        except OSError as err:
+            print(f"[WARNING] Mosquitto no disponible; se reintentará: {err}")
+            time.sleep(MQTT_RETRY_SECONDS)
+
+
 def main():
-    #conectarse a MQTT
-    client = mqtt.Client()
-    print(f"Conectando al broker MQTT en {MQTT_HOST}:{MQTT_PORT}...")
-    client.connect(MQTT_HOST, MQTT_PORT, 60)
+    client = mqtt.Client(
+        callback_api_version=mqtt.CallbackAPIVersion.VERSION2
+    )
+    conectar_mqtt(client)
     client.loop_start()
-    print (f"Generador de turnos activo. Publicando en '{MQTT_TOPIC}' cada 10 segundos...")
+    print(
+        f"Generador activo. Publicando en '{MQTT_TOPIC}' cada "
+        f"{PUBLICATION_INTERVAL_SECONDS:g} segundos..."
+    )
     try:
-        #Bucle enviando datos cada 10s
         while True:
             datos_turno = generador_turno_random()
             payload_json = json.dumps(datos_turno)
-            #Publicar en el topic MQTT
-            client.publish(MQTT_TOPIC, payload_json, qos=1)
+            resultado = client.publish(MQTT_TOPIC, payload_json, qos=1)
+            resultado.wait_for_publish()
+            if resultado.rc != mqtt.MQTT_ERR_SUCCESS:
+                raise RuntimeError(
+                    f"No se pudo publicar el turno: código MQTT {resultado.rc}."
+                )
             print(f"[ENVIADO] {payload_json}")
-            #esperar 10 segundos
-            time.sleep(10)
-
+            time.sleep(PUBLICATION_INTERVAL_SECONDS)
     except KeyboardInterrupt:
-            print("\n[INFO] Interrupción detectada por el usuario.")
-
+        print("\n[INFO] Interrupción detectada por el usuario.")
     finally:
-            # Este bloque SIEMPRE se ejecuta al salir del try/while
-            client.loop_stop()
-            client.disconnect()
-            print("Desconectado del broker MQTT. Saliendo del programa...")
+        client.loop_stop()
+        client.disconnect()
+        print("Desconectado de Mosquitto.")
 
 
 if __name__ == "__main__":

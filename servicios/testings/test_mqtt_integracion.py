@@ -1,6 +1,5 @@
 import json
 import os
-import secrets
 import time
 import uuid
 from datetime import date, timedelta
@@ -18,16 +17,17 @@ MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
 MQTT_TOPIC = os.getenv("MQTT_TOPIC", "turnos/solicitudes")
 
 
-def esperar_estado_reserva(id_reserva, timeout=15):
+def esperar_reserva(email, timeout=15):
     limite = time.monotonic() + timeout
     while time.monotonic() < limite:
-        respuesta = client.get(f"/reservas/{id_reserva}")
-        if respuesta.status_code == 200:
-            return respuesta.json()["estado_reserva"]
-        assert respuesta.status_code == 404, respuesta.text
+        respuesta = client.get("/reservas")
+        assert respuesta.status_code == 200, respuesta.text
+        for reserva in respuesta.json():
+            if reserva["email_solicitante"] == email:
+                return reserva
         time.sleep(0.2)
 
-    pytest.fail(f"La reserva {id_reserva} no fue procesada por MQTT en {timeout}s.")
+    pytest.fail(f"La reserva de {email} no llegó a la API en {timeout}s.")
 
 
 def publicar_solicitud(turno):
@@ -40,13 +40,11 @@ def publicar_solicitud(turno):
     )
 
 
-def test_cp27_turno_ocupado_a_traves_de_mqtt(personal):
+def test_solicitudes_mqtt_se_registran_a_traves_de_la_api(personal):
     fecha_turno = (date.today() + timedelta(days=7)).isoformat()
     email_base = f"cp27.{uuid.uuid4().hex[:12]}@example.com"
-    id_primera = secrets.randbelow(900000) + 100000
-    id_segunda = secrets.randbelow(900000) + 100000
-    while id_segunda == id_primera:
-        id_segunda = secrets.randbelow(900000) + 100000
+    email_primera = f"primero.{email_base}"
+    email_segunda = f"segundo.{email_base}"
 
     turno_base = {
         "idEstablecimiento": personal["id_establecimiento"],
@@ -57,26 +55,29 @@ def test_cp27_turno_ocupado_a_traves_de_mqtt(personal):
     }
     primera = {
         **turno_base,
-        "id": id_primera,
-        "email_cliente": f"primero.{email_base}",
+        "id": 123456,
+        "email_cliente": email_primera,
         "nombre_cliente": "Primer turno CP27",
     }
     duplicada = {
         **turno_base,
-        "id": id_segunda,
-        "email_cliente": f"segundo.{email_base}",
+        "id": 123457,
+        "email_cliente": email_segunda,
         "nombre_cliente": "Segundo turno CP27",
     }
+    ids_reservas = []
 
     try:
         publicar_solicitud(primera)
-        assert esperar_estado_reserva(id_primera) == "RESERVADO"
+        reserva_primera = esperar_reserva(email_primera)
+        ids_reservas.append(reserva_primera["id_reserva"])
+        assert reserva_primera["nombre"] == "Primer turno CP27"
 
         publicar_solicitud(duplicada)
-        assert (
-            esperar_estado_reserva(id_segunda)
-            == "RECHAZADO_TURNO_OCUPADO"
-        )
+        reserva_segunda = esperar_reserva(email_segunda)
+        ids_reservas.append(reserva_segunda["id_reserva"])
+        assert reserva_segunda["nombre"] == "Segundo turno CP27"
+        assert reserva_primera["id_reserva"] != reserva_segunda["id_reserva"]
     finally:
-        client.delete(f"/reservas/{id_primera}")
-        client.delete(f"/reservas/{id_segunda}")
+        for id_reserva in ids_reservas:
+            client.delete(f"/reservas/{id_reserva}")

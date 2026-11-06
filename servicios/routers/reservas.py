@@ -17,7 +17,7 @@ class ReservaCreate(BaseModel):
     hora_turno: time
 
 class ReservaUpdate(BaseModel):
-    estado_reserva: str  # 'RESERVADO', 'CANCELADO', 'FINALIZADO'
+    estado_reserva: str
     fecha_turno: str
     hora_turno: str
 

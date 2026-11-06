@@ -60,16 +60,12 @@ services:
       MQTT_HOST: mosquitto
       MQTT_PORT: 1883
       MQTT_TOPIC: turnos/solicitudes
-      DB_HOST: db
-      DB_PORT: 3306
-      DB_NAME: uruturn_db
-      DB_USER: uruturn_user
-      DB_PASSWORD: uruturn_password
+      API_BASE_URL: http://reservas-api:8000
     depends_on:
       mosquitto:
         condition: service_started
-      db:
-        condition: service_healthy
+      reservas-api:
+        condition: service_started
 
   # Servicio Consumidor de Turnos (Python)
   consumidor:
@@ -82,15 +78,11 @@ services:
       MQTT_HOST: mosquitto
       MQTT_PORT: 1883
       MQTT_TOPIC: turnos/solicitudes
-      DB_HOST: db
-      DB_PORT: 3306
-      DB_NAME: uruturn_db
-      DB_USER: uruturn_user
-      DB_PASSWORD: uruturn_password
+      API_BASE_URL: http://reservas-api:8000
     depends_on:
-      db:
-        condition: service_healthy
       mosquitto:
+        condition: service_started
+      reservas-api:
         condition: service_started
 
   # API REST de Reservas

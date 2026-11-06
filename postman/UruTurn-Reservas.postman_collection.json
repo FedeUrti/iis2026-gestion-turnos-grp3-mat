@@ -15,7 +15,7 @@
     },
     {
       "key": "fechaTurno",
-      "value": "2026-10-20"
+      "value": "2027-01-15"
     }
   ],
   "item": [
@@ -77,15 +77,9 @@
         "method": "GET",
         "header": [],
         "url": {
-          "raw": "{{baseUrl}}/reservas?fecha_turno={{fechaTurno}}",
+          "raw": "{{baseUrl}}/reservas",
           "host": ["{{baseUrl}}"],
-          "path": ["reservas"],
-          "query": [
-            {
-              "key": "fecha_turno",
-              "value": "{{fechaTurno}}"
-            }
-          ]
+          "path": ["reservas"]
         }
       }
     },
@@ -113,7 +107,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"estado_reserva\": \"CANCELADO\"\n}"
+          "raw": "{\n  \"estado_reserva\": \"CANCELADO\",\n  \"fecha_turno\": \"{{fechaTurno}}\",\n  \"hora_turno\": \"10:00:00\"\n}"
         },
         "url": {
           "raw": "{{baseUrl}}/reservas/{{reservaId}}",
